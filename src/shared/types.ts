@@ -39,6 +39,51 @@ export interface CharterEnquiry {
   status: EnquiryStatus;
 }
 
+/** Body of POST /api/v1/charter-enquiries (API-01). */
+export interface CharterEnquiryRequest {
+  yachtId: string;
+  startDate: string;
+  numberOfAdultGuests: number;
+  numberOfChildren: number;
+  cruisingArea: string;
+  otherCruisingAreaDetails?: string;
+  occasion?: string;
+  otherOccasionDetails?: string;
+  specialRequests?: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone: string;
+  privacyConsent: boolean;
+  marketingOptIn?: boolean;
+}
+
+export interface CharterEnquiryResponse {
+  bookingReference: string;
+  message: string;
+  yachtName: string;
+  startDate: string;
+  endDate: string;
+}
+
+/** Public view of a stored enquiry used by the confirmation page (SCR-02). */
+export interface EnquiryConfirmation {
+  bookingReference: string;
+  yachtName: string;
+  startDate: string;
+  endDate: string;
+  dates: string;
+  guests: number;
+  numberOfAdultGuests: number;
+  numberOfChildren: number;
+  cruisingArea: string;
+  otherCruisingAreaDetails?: string | null;
+  occasion?: string | null;
+  otherOccasionDetails?: string | null;
+  specialRequests?: string | null;
+  status: EnquiryStatus;
+  submissionTimestamp: string;
+}
+
 export interface LiveCheckRequest {
   yachtId: string;
   startDate: string;
@@ -50,6 +95,7 @@ export interface AlternativeOption {
   yachtName: string;
   startDate: string;
   endDate: string;
+  numberOfGuests: number;
   reason: string;
 }
 
@@ -59,8 +105,15 @@ export interface LiveCheckResponse {
   alternatives: AlternativeOption[];
 }
 
-export interface CharterEnquirySubmission extends CharterEnquiry {
-  yachtName?: string;
+export interface BrokerEnquiryRow {
+  reference: string;
+  clientName: string;
+  yachtName: string;
+  startDate: string;
+  endDate: string;
+  guests: number;
+  status: EnquiryStatus;
+  receivedDate: string;
 }
 
 export interface BrokerEnquiryListResponse {
@@ -71,16 +124,7 @@ export interface BrokerEnquiryListResponse {
     unavailable: number;
     percentAvailable: number;
   };
-  enquiries: Array<{
-    reference: string;
-    clientName: string;
-    yachtName: string;
-    startDate: string;
-    endDate: string;
-    guests: number;
-    status: EnquiryStatus;
-    receivedDate: string;
-  }>;
+  enquiries: BrokerEnquiryRow[];
 }
 
 export interface IndicativePricing {
@@ -109,7 +153,10 @@ export interface FormStep2Data {
 export interface FormStep3Data {
   clientName?: string;
   clientEmail?: string;
+  /** E.164 value built from the picker (phoneCountry + phoneNational). */
   clientPhone?: string;
+  phoneCountry?: string;
+  phoneNational?: string;
   privacyConsent: boolean;
   marketingOptIn: boolean;
 }

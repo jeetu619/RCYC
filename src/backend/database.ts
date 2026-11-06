@@ -1,17 +1,19 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+import { addDays, todayISO } from '../shared/dates';
 
 let db: Database | null = null;
 
-export async function initializeDatabase(): Promise<Database> {
+/**
+ * Opens (once) the SQLite database. `filename` defaults to $DB_PATH or ./data.sqlite3;
+ * pass ':memory:' for an isolated database (used by the tests).
+ */
+export async function initializeDatabase(filename?: string): Promise<Database> {
   if (db) return db;
 
   db = await open({
-    filename: path.join(__dirname, '../../data.sqlite3'),
+    filename: filename ?? process.env.DB_PATH ?? path.resolve(process.cwd(), 'data.sqlite3'),
     driver: sqlite3.Database
   });
 
@@ -19,6 +21,7 @@ export async function initializeDatabase(): Promise<Database> {
 
   await createTables();
   await seedYachts();
+  await seedC2Calendar();
 
   return db;
 }
@@ -40,6 +43,16 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS booking_reference_counters (
       year INTEGER PRIMARY KEY,
       counter INTEGER NOT NULL DEFAULT 0
+    );
+
+    -- Stand-in for the C2 availability calendar: Saturdays that are Held or Booked.
+    -- Any Saturday without a row is Available.
+    CREATE TABLE IF NOT EXISTS c2_calendar (
+      yachtId TEXT NOT NULL,
+      startDate TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('Held', 'Booked')),
+      PRIMARY KEY (yachtId, startDate),
+      FOREIGN KEY (yachtId) REFERENCES yachts(id)
     );
 
     CREATE TABLE IF NOT EXISTS charter_enquiries (
@@ -65,8 +78,6 @@ async function createTables() {
       FOREIGN KEY (yachtId) REFERENCES yachts(id)
     );
 
-    CREATE INDEX IF NOT EXISTS idx_charter_enquiries_booking_reference
-      ON charter_enquiries(bookingReference);
     CREATE INDEX IF NOT EXISTS idx_charter_enquiries_status
       ON charter_enquiries(status);
     CREATE INDEX IF NOT EXISTS idx_charter_enquiries_yacht_id
@@ -84,9 +95,36 @@ async function seedYachts() {
 
   await db.exec(`
     INSERT INTO yachts (id, name, lengthMeters, cabins, maxGuests, weeklyRateEuro, photoUrl) VALUES
-    ('yacht-sea-lark', 'Sea Lark', 25, 5, 10, 65000, '/images/sea-lark.jpg'),
-    ('yacht-calliope', 'Calliope', 20, 4, 8, 29500, '/images/calliope.jpg');
+    ('yacht-sea-lark', 'Sea Lark', 25, 5, 10, 65000, '/images/sea-lark.svg'),
+    ('yacht-calliope', 'Calliope', 20, 4, 8, 29500, '/images/calliope.svg');
   `);
+}
+
+/** Demo availability so the calendar shows Available / Held / Booked weeks out of the box. */
+async function seedC2Calendar() {
+  if (!db) throw new Error('Database not initialized');
+  const existing = await db.get('SELECT COUNT(*) as count FROM c2_calendar');
+  if (existing.count > 0) return;
+
+  // First Saturday strictly after today.
+  let saturday = addDays(todayISO(), 1);
+  while (new Date(`${saturday}T00:00:00Z`).getUTCDay() !== 6) saturday = addDays(saturday, 1);
+  const week = (n: number) => addDays(saturday, n * 7);
+
+  const rows: Array<[string, string, 'Held' | 'Booked']> = [
+    ['yacht-sea-lark', week(1), 'Held'],
+    ['yacht-sea-lark', week(2), 'Booked'],
+    ['yacht-sea-lark', week(4), 'Booked'],
+    ['yacht-calliope', week(0), 'Booked'],
+    ['yacht-calliope', week(3), 'Held']
+  ];
+  for (const [yachtId, startDate, status] of rows) {
+    await db.run('INSERT OR IGNORE INTO c2_calendar (yachtId, startDate, status) VALUES (?, ?, ?)', [
+      yachtId,
+      startDate,
+      status
+    ]);
+  }
 }
 
 export function getDatabase(): Database {

@@ -1,162 +1,151 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { getEnquiryDetails } from '../api/client';
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { ApiError, getEnquiryDetails } from '../api/client';
+import { downloadIcs } from '../utils/ics';
+import type { EnquiryConfirmation } from '../../shared/types';
+
+const TIMELINE = [
+  { title: 'Quote by email', text: 'We send your personalised quote to the email address you provided.' },
+  { title: 'Yacht held for you', text: 'Once you accept, we hold the yacht for your dates.' },
+  { title: 'Pay deposit to confirm', text: 'Secure the charter with the 50% deposit.' }
+];
+
+const STATUS_LABEL: Record<string, string> = {
+  OnHold: 'On hold',
+  CapacityExceeded: 'Capacity exceeded',
+  IntegrationError: 'Under review'
+};
 
 export default function ConfirmationPage() {
   const { reference } = useParams<{ reference: string }>();
-  const navigate = useNavigate();
-  const [enquiry, setEnquiry] = useState<any>(null);
+  const [enquiry, setEnquiry] = useState<EnquiryConfirmation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    const loadEnquiry = async () => {
-      if (!reference) {
-        setError('No enquiry reference provided');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const data = await getEnquiryDetails(reference);
-        setEnquiry(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getEnquiryDetails(reference ?? '')
+      .then(data => !cancelled && setEnquiry(data))
+      .catch(err => {
+        if (cancelled) return;
+        setError(
+          err instanceof ApiError && err.status === 404
+            ? 'We could not find that enquiry. Please check the reference and try again.'
+            : 'We could not load your enquiry right now.'
+        );
+      })
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
     };
+  }, [reference, attempt]);
 
-    loadEnquiry();
-  }, [reference]);
+  if (loading) {
+    return (
+      <div className="page">
+        <main id="main" className="confirmation-content">
+          <div className="loading" role="status">
+            <span className="spinner" aria-hidden="true" /> Loading your enquiry…
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  const handlePrint = () => {
-    window.print();
-  };
+  if (error || !enquiry) {
+    return (
+      <div className="page">
+        <main id="main" className="confirmation-content">
+          <div className="error-summary" role="alert">
+            <strong>{error ?? 'Enquiry not found'}</strong>
+            <div className="error-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setAttempt(a => a + 1)}>
+                Retry
+              </button>
+              <Link className="btn btn-primary" to="/charter/enquiry">
+                Return to the enquiry form
+              </Link>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
-  const handleAddToCalendar = () => {
-    if (!enquiry) return;
-
-    const start = new Date(enquiry.startDate + 'T00:00:00Z');
-    const end = new Date(enquiry.endDate + 'T23:59:59Z');
-
-    const icsContent = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//Charter Enquiry//EN',
-      'BEGIN:VEVENT',
-      `DTSTART:${start.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`,
-      `DTEND:${end.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`,
-      `SUMMARY:Charter: ${enquiry.yachtName}`,
-      `DESCRIPTION:Booking Reference: ${enquiry.bookingReference}\\nGuests: ${enquiry.guests}`,
-      'END:VEVENT',
-      'END:VCALENDAR'
-    ].join('\r\n');
-
-    const blob = new Blob([icsContent], { type: 'text/calendar' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `charter-${reference}.ics`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-
-  if (loading) return <div className="page"><div className="loading">Loading confirmation...</div></div>;
-  if (error) return <div className="page"><div className="error">Error: {error}</div></div>;
-  if (!enquiry) return <div className="page"><div className="error">Enquiry not found</div></div>;
+  const area = enquiry.cruisingArea === 'Other' && enquiry.otherCruisingAreaDetails ? enquiry.otherCruisingAreaDetails : enquiry.cruisingArea;
+  const statusLabel = STATUS_LABEL[enquiry.status] ?? enquiry.status;
 
   return (
     <div className="page confirmation-page">
       <header className="page-header">
-        <h1>Enquiry Confirmed</h1>
-        <p>Thank you for your submission!</p>
+        <h1>Thank you – your enquiry has been received</h1>
+        <p>We have recorded your request and will be in touch shortly.</p>
       </header>
 
-      <main className="confirmation-content">
-        <div className="confirmation-card">
+      <main id="main" className="confirmation-content">
+        <section className="confirmation-card" aria-labelledby="ref-heading">
           <div className="reference-box">
-            <h2>Your Booking Reference</h2>
-            <div className="reference-number">{enquiry.bookingReference}</div>
-          </div>
-
-          <div className="enquiry-details">
-            <h3>Enquiry Details</h3>
-            <div className="detail-row">
-              <span>Yacht:</span>
-              <strong>{enquiry.yachtName}</strong>
-            </div>
-            <div className="detail-row">
-              <span>Dates:</span>
-              <strong>{enquiry.dates}</strong>
-            </div>
-            <div className="detail-row">
-              <span>Guests:</span>
-              <strong>{enquiry.guests}</strong>
-            </div>
-            <div className="detail-row">
-              <span>Cruising Area:</span>
-              <strong>{enquiry.cruisingArea}</strong>
-            </div>
-            {enquiry.occasion && (
-              <div className="detail-row">
-                <span>Occasion:</span>
-                <strong>{enquiry.occasion}</strong>
-              </div>
-            )}
-            <div className="detail-row">
-              <span>Status:</span>
-              <strong className={`status-${enquiry.status.toLowerCase()}`}>{enquiry.status}</strong>
+            <h2 id="ref-heading">Your Enquiry Reference</h2>
+            <div className="reference-number" data-testid="booking-reference">
+              {enquiry.bookingReference}
             </div>
           </div>
 
-          <div className="what-happens-next">
-            <h3>What Happens Next</h3>
-            <div className="timeline">
-              <div className="timeline-item">
-                <div className="timeline-marker">1</div>
-                <div className="timeline-content">
-                  <h4>Quote by Email</h4>
-                  <p>You'll receive a detailed quote within 24 hours</p>
-                </div>
-              </div>
-              <div className="timeline-item">
-                <div className="timeline-marker">2</div>
-                <div className="timeline-content">
-                  <h4>Yacht Held for You</h4>
-                  <p>Your selected dates will be temporarily held</p>
-                </div>
-              </div>
-              <div className="timeline-item">
-                <div className="timeline-marker">3</div>
-                <div className="timeline-content">
-                  <h4>Pay Deposit to Confirm</h4>
-                  <p>Secure your booking with a 50% deposit</p>
-                </div>
-              </div>
+          <dl className="enquiry-details">
+            <div className="detail-row">
+              <dt>Yacht</dt>
+              <dd>{enquiry.yachtName}</dd>
             </div>
-          </div>
+            <div className="detail-row">
+              <dt>Dates</dt>
+              <dd>{enquiry.dates}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Guests</dt>
+              <dd>{enquiry.guests} guests</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Cruising Area</dt>
+              <dd>{area}</dd>
+            </div>
+            <div className="detail-row">
+              <dt>Status</dt>
+              <dd>
+                <span className={`chip chip-${enquiry.status.toLowerCase()}`}>{statusLabel}</span>
+              </dd>
+            </div>
+          </dl>
 
-          <div className="confirmation-actions">
-            <button className="btn btn-primary" onClick={handleAddToCalendar}>
-              📅 Add to Calendar
+          <section className="what-happens-next" aria-labelledby="next-heading">
+            <h3 id="next-heading">What happens next</h3>
+            <ol className="timeline">
+              {TIMELINE.map((item, i) => (
+                <li key={item.title} className="timeline-item">
+                  <span className="timeline-marker">{i + 1}</span>
+                  <div>
+                    <h4>{item.title}</h4>
+                    <p>{item.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          <div className="confirmation-actions no-print">
+            <button type="button" className="btn btn-primary" onClick={() => downloadIcs(enquiry)}>
+              Add to Calendar
             </button>
-            <button className="btn btn-secondary" onClick={handlePrint}>
-              🖨️ Print
+            <button type="button" className="btn btn-secondary" onClick={() => window.print()}>
+              Print
             </button>
-            <button className="btn btn-secondary" onClick={() => navigate('/charter/enquiry')}>
-              New Enquiry
-            </button>
+            <Link className="btn btn-secondary" to="/charter/enquiry">
+              New enquiry
+            </Link>
           </div>
-        </div>
-
-        <div className="contact-info">
-          <h3>Questions?</h3>
-          <p>Our team is ready to help. Contact us at any time.</p>
-          <p>Email: info@charter-enquiry.com</p>
-        </div>
+        </section>
       </main>
     </div>
   );

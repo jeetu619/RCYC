@@ -1,96 +1,105 @@
 import type {
-  Yacht,
-  CharterEnquiry,
+  AvailabilityEntry,
+  BrokerEnquiryListResponse,
+  CharterEnquiryRequest,
+  CharterEnquiryResponse,
+  EnquiryConfirmation,
   LiveCheckRequest,
   LiveCheckResponse,
-  AvailabilityEntry,
-  BrokerEnquiryListResponse
+  Yacht
 } from '../../shared/types';
 
 const API_BASE = '/api';
+const SESSION_KEY = 'broker-session';
 
-export async function getYachts(): Promise<Yacht[]> {
-  const response = await fetch(`${API_BASE}/yachts`);
-  if (!response.ok) throw new Error('Failed to fetch yachts');
-  return response.json();
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public details: Array<{ field: string; message: string }> = []
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
 }
 
-export async function getYachtAvailability(
-  yachtId: string,
-  from: string,
-  to: string
-): Promise<AvailabilityEntry[]> {
-  const response = await fetch(
-    `${API_BASE}/yachts/${yachtId}/availability?from=${from}&to=${to}`
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, init);
+  } catch {
+    throw new ApiError(0, 'Network error');
+  }
+  if (!response.ok) {
+    let body: any = null;
+    try {
+      body = await response.json();
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(response.status, body?.error || `Request failed (${response.status})`, body?.details ?? []);
+  }
+  return response.json() as Promise<T>;
+}
+
+const json = (body: unknown, extra: Record<string, string> = {}): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', ...extra },
+  body: JSON.stringify(body)
+});
+
+export const getYachts = () => request<Yacht[]>('/yachts');
+
+export const getYachtAvailability = (yachtId: string, from: string, to: string) =>
+  request<AvailabilityEntry[]>(
+    `/yachts/${encodeURIComponent(yachtId)}/availability?from=${from}&to=${to}`
   );
-  if (!response.ok) throw new Error('Failed to fetch availability');
-  return response.json();
+
+export const checkLiveAvailability = (body: LiveCheckRequest) =>
+  request<LiveCheckResponse>('/charter-enquiries/check', json(body));
+
+export const submitEnquiry = (body: CharterEnquiryRequest) =>
+  request<CharterEnquiryResponse>('/v1/charter-enquiries', json(body));
+
+export const getEnquiryDetails = (reference: string) =>
+  request<EnquiryConfirmation>(`/charter-enquiries/${encodeURIComponent(reference)}`);
+
+// ---- Broker ------------------------------------------------------------------------------------
+
+export const getBrokerSession = () => sessionStorage.getItem(SESSION_KEY);
+
+export async function brokerLogin(accessCode: string): Promise<void> {
+  const { sessionToken } = await request<{ sessionToken: string }>('/auth/broker-login', json({ accessCode }));
+  sessionStorage.setItem(SESSION_KEY, sessionToken);
 }
 
-export async function checkLiveAvailability(
-  request: LiveCheckRequest
-): Promise<LiveCheckResponse> {
-  const response = await fetch(`${API_BASE}/charter-enquiries/check`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(request)
-  });
-  if (!response.ok) throw new Error('Failed to check availability');
-  return response.json();
-}
-
-export async function submitEnquiry(enquiry: Partial<CharterEnquiry>): Promise<{
-  bookingReference: string;
-  yachtName: string;
-  startDate: string;
-  endDate: string;
-}> {
-  const response = await fetch(`${API_BASE}/v1/charter-enquiries`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(enquiry)
-  });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.details?.[0]?.message || error.error || 'Submission failed');
+export async function brokerLogout(): Promise<void> {
+  const session = getBrokerSession();
+  sessionStorage.removeItem(SESSION_KEY);
+  if (session) {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${session}` } }).catch(
+      () => undefined
+    );
   }
-  return response.json();
 }
 
-export async function getEnquiryDetails(reference: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/charter-enquiries/${reference}`);
-  if (!response.ok) throw new Error('Failed to fetch enquiry');
-  return response.json();
+export interface BrokerFilters {
+  status?: string;
+  yachtId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
 }
 
-export async function getBrokerEnquiries(
-  filters?: {
-    status?: string;
-    yachtId?: string;
-    dateFrom?: string;
-    dateTo?: string;
-    search?: string;
-    page?: number;
-    pageSize?: number;
-  },
-  token?: string
-): Promise<BrokerEnquiryListResponse> {
+export function getBrokerEnquiries(filters: BrokerFilters = {}): Promise<BrokerEnquiryListResponse> {
   const params = new URLSearchParams();
-  if (filters?.status) params.append('status', filters.status);
-  if (filters?.yachtId) params.append('yachtId', filters.yachtId);
-  if (filters?.dateFrom) params.append('dateFrom', filters.dateFrom);
-  if (filters?.dateTo) params.append('dateTo', filters.dateTo);
-  if (filters?.search) params.append('search', filters.search);
-  if (filters?.page) params.append('page', filters.page.toString());
-  if (filters?.pageSize) params.append('pageSize', filters.pageSize.toString());
-
-  const response = await fetch(`${API_BASE}/charter-enquiries?${params.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {}
-  });
-
-  if (!response.ok) {
-    if (response.status === 401) throw new Error('Unauthorized');
-    throw new Error('Failed to fetch enquiries');
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== '') params.append(key, String(value));
   }
-  return response.json();
+  const session = getBrokerSession();
+  return request<BrokerEnquiryListResponse>(`/charter-enquiries?${params.toString()}`, {
+    headers: session ? { Authorization: `Bearer ${session}` } : {}
+  });
 }

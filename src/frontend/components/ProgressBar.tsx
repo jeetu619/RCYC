@@ -1,37 +1,38 @@
-import React from 'react';
-
 interface ProgressBarProps {
   currentStep: number;
-  totalSteps: number;
   steps: string[];
 }
 
-export default function ProgressBar({ currentStep, totalSteps, steps }: ProgressBarProps) {
-  const progressPercentage = (currentStep / totalSteps) * 100;
+export default function ProgressBar({ currentStep, steps }: ProgressBarProps) {
+  const percentage = (currentStep / steps.length) * 100;
 
   return (
-    <div className="progress-container">
-      <div className="progress-bar-wrapper">
-        <div className="progress-bar">
-          <div
-            className="progress-fill"
-            style={{ width: `${progressPercentage}%` }}
-          />
-        </div>
+    <nav className="progress-container" aria-label="Enquiry progress">
+      <div
+        className="progress-bar"
+        role="progressbar"
+        aria-valuemin={1}
+        aria-valuemax={steps.length}
+        aria-valuenow={currentStep}
+        aria-valuetext={`Step ${currentStep} of ${steps.length}: ${steps[currentStep - 1]}`}
+      >
+        <div className="progress-fill" style={{ width: `${percentage}%` }} />
       </div>
-      <div className="progress-steps">
-        {steps.map((step, index) => (
-          <div
-            key={index}
-            className={`progress-step ${index + 1 <= currentStep ? 'active' : ''} ${
-              index + 1 === currentStep ? 'current' : ''
-            }`}
-          >
-            <div className="step-number">{index + 1}</div>
-            <div className="step-label">{step}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+      <ol className="progress-steps">
+        {steps.map((label, index) => {
+          const n = index + 1;
+          return (
+            <li
+              key={label}
+              className={`progress-step ${n <= currentStep ? 'active' : ''} ${n === currentStep ? 'current' : ''}`}
+              aria-current={n === currentStep ? 'step' : undefined}
+            >
+              <span className="step-number">{n}</span>
+              <span className="step-label">{label}</span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }

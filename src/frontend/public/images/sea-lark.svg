@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" role="img" aria-label="Sea Lark">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fd3f5"/><stop offset="1" stop-color="#e8f5ff"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b6ea8"/><stop offset="1" stop-color="#0b3d66"/></linearGradient>
+  </defs>
+  <rect width="400" height="220" fill="url(#sky)"/>
+  <circle cx="330" cy="50" r="22" fill="#ffe08a"/>
+  <rect y="130" width="400" height="90" fill="url(#sea)"/>
+  <path d="M60 128 L340 128 L318 156 L88 156 Z" fill="#fff"/>
+  <rect x="120" y="102" width="150" height="26" rx="4" fill="#f4f7fa"/>
+  <rect x="150" y="80" width="90" height="22" rx="4" fill="#fff"/>
+  <g fill="#0b3d66"><rect x="132" y="110" width="18" height="9" rx="2"/><rect x="158" y="110" width="18" height="9" rx="2"/><rect x="184" y="110" width="18" height="9" rx="2"/><rect x="210" y="110" width="18" height="9" rx="2"/><rect x="236" y="110" width="18" height="9" rx="2"/></g>
+  <rect x="195" y="58" width="3" height="24" fill="#889"/>
+  <path d="M88 156 L318 156" stroke="#c9333b" stroke-width="3"/>
+  <path d="M0 170 Q50 160 100 170 T200 170 T300 170 T400 170" stroke="#ffffff55" stroke-width="3" fill="none"/>
+  <path d="M0 192 Q50 182 100 192 T200 192 T300 192 T400 192" stroke="#ffffff33" stroke-width="3" fill="none"/>
+</svg>

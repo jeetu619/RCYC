@@ -1,75 +1,73 @@
-import type { AvailabilityEntry, AlternativeOption, LiveCheckStatus } from '../../shared/types';
+import type { AlternativeOption, AvailabilityEntry, AvailabilityStatus, LiveCheckResponse } from '../../shared/types';
+import { ALTERNATIVE_WEEKS_RANGE, MAX_ALTERNATIVES } from '../../shared/constants';
+import { addDays, deriveEndDate, isFutureDate, parseISODate, toISODate } from '../../shared/dates';
 import { getDatabase } from '../database';
 
-export async function getYachtAvailability(yachtId: string, from: string, to: string): Promise<AvailabilityEntry[]> {
-  const startDate = new Date(from + 'T00:00:00Z');
-  const endDate = new Date(to + 'T00:00:00Z');
-  const availability: AvailabilityEntry[] = [];
+/**
+ * Stand-in for the C2 availability service (the real C2 owns holds and bookings).
+ * Reads the c2_calendar table: Saturdays without a row are Available.
+ */
+export async function getDateStatus(yachtId: string, date: string): Promise<AvailabilityStatus> {
+  const row = await getDatabase().get('SELECT status FROM c2_calendar WHERE yachtId = ? AND startDate = ?', [
+    yachtId,
+    date
+  ]);
+  return (row?.status as AvailabilityStatus | undefined) ?? 'Available';
+}
 
-  const db = getDatabase();
-  const booked = await db.all(
-    `SELECT DISTINCT startDate FROM charter_enquiries
-     WHERE yachtId = ? AND status IN ('Submitted', 'Available', 'OnHold')
-     AND startDate >= ? AND startDate <= ?`,
+/** API-03: status of every Saturday between `from` and `to` (inclusive). */
+export async function getYachtAvailability(yachtId: string, from: string, to: string): Promise<AvailabilityEntry[]> {
+  const rows = await getDatabase().all(
+    'SELECT startDate, status FROM c2_calendar WHERE yachtId = ? AND startDate >= ? AND startDate <= ?',
     [yachtId, from, to]
   );
+  const marked = new Map<string, AvailabilityStatus>(rows.map((r: any) => [r.startDate, r.status]));
 
-  const bookedDates = new Set(booked.map((b: any) => b.startDate));
-
-  let current = new Date(startDate);
-  while (current <= endDate) {
+  const result: AvailabilityEntry[] = [];
+  const current = parseISODate(from)!;
+  const end = parseISODate(to)!;
+  while (current <= end) {
     if (current.getUTCDay() === 6) {
-      const dateStr = current.toISOString().split('T')[0];
-      const status = bookedDates.has(dateStr) ? 'Booked' : 'Available';
-      availability.push({ date: dateStr, status });
+      const date = toISODate(current);
+      result.push({ date, status: marked.get(date) ?? 'Available' });
     }
     current.setUTCDate(current.getUTCDate() + 1);
   }
-
-  return availability;
+  return result;
 }
 
+/** API-04: live availability + capacity check, with up to 3 alternatives when the choice is not viable. */
 export async function checkLiveAvailability(
   yachtId: string,
   startDate: string,
   numberOfGuests: number
-): Promise<{ status: LiveCheckStatus; message: string; alternatives: AlternativeOption[] }> {
-  const db = getDatabase();
+): Promise<LiveCheckResponse | null> {
+  const yacht = await getDatabase().get('SELECT maxGuests FROM yachts WHERE id = ?', [yachtId]);
+  if (!yacht) return null;
 
-  const yacht = await db.get('SELECT maxGuests FROM yachts WHERE id = ?', [yachtId]);
-  if (!yacht) {
+  if (numberOfGuests > yacht.maxGuests) {
+    return {
+      status: 'CapacityExceeded',
+      message: `Too many guests for this yacht (maximum ${yacht.maxGuests}).`,
+      alternatives: await findAlternatives(yachtId, startDate, numberOfGuests)
+    };
+  }
+
+  const dateStatus = await getDateStatus(yachtId, startDate);
+  if (dateStatus === 'Booked') {
     return {
       status: 'Booked',
-      message: 'Yacht not found',
+      message: 'This yacht is already booked for these dates.',
+      alternatives: await findAlternatives(yachtId, startDate, numberOfGuests)
+    };
+  }
+  if (dateStatus === 'Held') {
+    return {
+      status: 'OnHold',
+      message: 'On hold – may become free. You can still submit your enquiry.',
       alternatives: []
     };
   }
-
-  if (numberOfGuests > yacht.maxGuests) {
-    const alternatives = await getAlternativeYachts(yachtId, startDate, numberOfGuests);
-    return {
-      status: 'CapacityExceeded',
-      message: `Too many guests for this yacht (max ${yacht.maxGuests})`,
-      alternatives
-    };
-  }
-
-  const existingEnquiry = await db.get(
-    `SELECT id FROM charter_enquiries
-     WHERE yachtId = ? AND startDate = ?
-     AND status IN ('Submitted', 'Available', 'OnHold')`,
-    [yachtId, startDate]
-  );
-
-  if (existingEnquiry) {
-    const alternatives = await getAlternativeYachts(yachtId, startDate, numberOfGuests);
-    return {
-      status: 'Booked',
-      message: 'This yacht is not available for the selected dates',
-      alternatives
-    };
-  }
-
   return {
     status: 'Available',
     message: 'This yacht is available for your dates and guest count.',
@@ -77,60 +75,70 @@ export async function checkLiveAvailability(
   };
 }
 
-async function getAlternativeYachts(
+/**
+ * Up to 3 alternatives: the same yacht on the nearest free Saturdays within ±3 weeks,
+ * then other suitable yachts on the same dates (or their nearest free Saturday).
+ */
+export async function findAlternatives(
   yachtId: string,
   startDate: string,
   numberOfGuests: number
 ): Promise<AlternativeOption[]> {
   const db = getDatabase();
-  const alternatives: AlternativeOption[] = [];
+  const yacht = await db.get('SELECT maxGuests FROM yachts WHERE id = ?', [yachtId]);
+  const options: AlternativeOption[] = [];
 
-  const currentDate = new Date(startDate + 'T00:00:00Z');
-  const searchStart = new Date(currentDate);
-  searchStart.setUTCDate(searchStart.getUTCDate() - 21);
-  const searchEnd = new Date(currentDate);
-  searchEnd.setUTCDate(searchEnd.getUTCDate() + 21);
+  const offsets: number[] = [];
+  for (let w = 1; w <= ALTERNATIVE_WEEKS_RANGE; w++) offsets.push(-w, w);
 
-  const yachts = await db.all(
-    'SELECT id, name, maxGuests FROM yachts WHERE id != ? ORDER BY maxGuests DESC LIMIT 2',
-    [yachtId]
-  );
+  const nearestFree = async (id: string): Promise<{ date: string; weeks: number } | null> => {
+    const candidates = [0, ...offsets];
+    for (const weeks of candidates) {
+      const date = addDays(startDate, weeks * 7);
+      if (!isFutureDate(date)) continue;
+      if ((await getDateStatus(id, date)) === 'Available') return { date, weeks };
+    }
+    return null;
+  };
 
-  for (const yacht of yachts) {
-    if (yacht.maxGuests < numberOfGuests) continue;
-
-    let searchDate = new Date(searchStart);
-    let found = false;
-
-    while (searchDate <= searchEnd && alternatives.length < 3) {
-      if (searchDate.getUTCDay() === 6) {
-        const dateStr = searchDate.toISOString().split('T')[0];
-        const endDateStr = new Date(searchDate);
-        endDateStr.setUTCDate(endDateStr.getUTCDate() + 7);
-        const endDateStrFormatted = endDateStr.toISOString().split('T')[0];
-
-        const conflict = await db.get(
-          `SELECT id FROM charter_enquiries
-           WHERE yachtId = ? AND startDate = ?
-           AND status IN ('Submitted', 'Available', 'OnHold')`,
-          [yacht.id, dateStr]
-        );
-
-        if (!conflict && Math.abs(new Date(dateStr).getTime() - currentDate.getTime()) > 0) {
-          alternatives.push({
-            yachtId: yacht.id,
-            yachtName: yacht.name,
-            startDate: dateStr,
-            endDate: endDateStrFormatted,
-            reason: dateStr !== startDate ? 'Alternative date available' : 'Alternative yacht available'
-          });
-          found = true;
-          break;
-        }
-      }
-      searchDate.setUTCDate(searchDate.getUTCDate() + 1);
+  // Same yacht on other Saturdays (only useful when capacity is not the problem).
+  if (yacht && numberOfGuests <= yacht.maxGuests) {
+    const yachtRow = await db.get('SELECT name FROM yachts WHERE id = ?', [yachtId]);
+    for (const weeks of offsets.sort((a, b) => Math.abs(a) - Math.abs(b) || a - b)) {
+      const date = addDays(startDate, weeks * 7);
+      if (!isFutureDate(date)) continue;
+      if ((await getDateStatus(yachtId, date)) !== 'Available') continue;
+      options.push({
+        yachtId,
+        yachtName: yachtRow.name,
+        startDate: date,
+        endDate: deriveEndDate(date),
+        numberOfGuests,
+        reason: `Same yacht, ${Math.abs(weeks)} week${Math.abs(weeks) > 1 ? 's' : ''} ${weeks < 0 ? 'earlier' : 'later'}`
+      });
     }
   }
 
-  return alternatives;
+  const others = await db.all(
+    'SELECT id, name FROM yachts WHERE id != ? AND maxGuests >= ? ORDER BY maxGuests DESC',
+    [yachtId, numberOfGuests]
+  );
+  const sameWeek: AlternativeOption[] = [];
+  for (const other of others) {
+    const free = await nearestFree(other.id);
+    if (!free) continue;
+    sameWeek.push({
+      yachtId: other.id,
+      yachtName: other.name,
+      startDate: free.date,
+      endDate: deriveEndDate(free.date),
+      numberOfGuests,
+      reason: free.weeks === 0 ? 'Different yacht, same dates' : `Different yacht, ${Math.abs(free.weeks)} week${Math.abs(free.weeks) > 1 ? 's' : ''} ${free.weeks < 0 ? 'earlier' : 'later'}`
+    });
+  }
+
+  // Same-date options on other yachts are the closest match, so they go first for a capacity problem
+  // (where the same yacht cannot help) and after the same-yacht options otherwise.
+  const ordered = numberOfGuests > (yacht?.maxGuests ?? Infinity) ? [...sameWeek, ...options] : [...options, ...sameWeek];
+  return ordered.slice(0, MAX_ALTERNATIVES);
 }

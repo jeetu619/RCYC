@@ -1,131 +1,168 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { getYachtAvailability } from '../api/client';
-import type { AvailabilityEntry } from '../../shared/types';
+import { formatDateRange, isFutureDate, isSaturday, toISODate, todayISO } from '../../shared/dates';
+import type { AvailabilityEntry, AvailabilityStatus } from '../../shared/types';
 
 interface DatePickerProps {
   yachtId?: string;
   selectedDate?: string;
-  onSelect: (date: string, endDate: string) => void;
+  onSelect: (startDate: string) => void;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+interface Cell {
+  date: string | null;
+}
+
+function buildMonth(year: number, month: number): Cell[] {
+  const first = new Date(Date.UTC(year, month, 1));
+  const cells: Cell[] = Array.from({ length: first.getUTCDay() }, () => ({ date: null }));
+  const d = new Date(first);
+  while (d.getUTCMonth() === month) {
+    cells.push({ date: toISODate(d) });
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return cells;
 }
 
 export default function DatePicker({ yachtId, selectedDate, onSelect }: DatePickerProps) {
-  const [availability, setAvailability] = useState<Map<string, AvailabilityEntry>>(new Map());
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
+  const anchor = selectedDate ?? todayISO();
+  const [view, setView] = useState({ year: Number(anchor.slice(0, 4)), month: Number(anchor.slice(5, 7)) - 1 });
+  const [availability, setAvailability] = useState<Map<string, AvailabilityStatus>>(new Map());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
+
+  // Jump to the month of a date chosen elsewhere (e.g. an applied alternative).
+  useEffect(() => {
+    if (selectedDate) setView({ year: Number(selectedDate.slice(0, 4)), month: Number(selectedDate.slice(5, 7)) - 1 });
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!yachtId) return;
-
-    const loadAvailability = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const startMonth = new Date(currentMonth);
-        startMonth.setUTCDate(1);
-        const endMonth = new Date(currentMonth);
-        endMonth.setUTCMonth(endMonth.getUTCMonth() + 3);
-        endMonth.setUTCDate(0);
-
-        const from = startMonth.toISOString().split('T')[0];
-        const to = endMonth.toISOString().split('T')[0];
-
-        const data = await getYachtAvailability(yachtId, from, to);
-        const availabilityMap = new Map(data.map(a => [a.date, a]));
-        setAvailability(availabilityMap);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+    let cancelled = false;
+    const from = toISODate(new Date(Date.UTC(view.year, view.month, 1)));
+    const to = toISODate(new Date(Date.UTC(view.year, view.month + 1, 0)));
+    setLoading(true);
+    setError(null);
+    getYachtAvailability(yachtId, from, to)
+      .then((data: AvailabilityEntry[]) => {
+        if (!cancelled) setAvailability(new Map(data.map(a => [a.date, a.status])));
+      })
+      .catch(err => {
+        console.error('Could not load availability', err);
+        if (!cancelled) setError('Could not load availability');
+      })
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
     };
-
-    loadAvailability();
-  }, [yachtId, currentMonth]);
-
-  const getSaturdaysInMonth = (date: Date): Date[] => {
-    const year = date.getUTCFullYear();
-    const month = date.getUTCMonth();
-    const saturdays: Date[] = [];
-
-    const firstDay = new Date(Date.UTC(year, month, 1));
-    const daysUntilSaturday = (6 - firstDay.getUTCDay()) % 7;
-    const firstSaturday = new Date(Date.UTC(year, month, 1 + daysUntilSaturday));
-
-    for (let d = new Date(firstSaturday); d.getUTCMonth() === month; d.setUTCDate(d.getUTCDate() + 7)) {
-      saturdays.push(new Date(d));
-    }
-
-    return saturdays;
-  };
-
-  const handleDateSelect = (saturday: Date) => {
-    const startDateStr = saturday.toISOString().split('T')[0];
-    const endDate = new Date(saturday);
-    endDate.setUTCDate(endDate.getUTCDate() + 7);
-    const endDateStr = endDate.toISOString().split('T')[0];
-    onSelect(startDateStr, endDateStr);
-  };
-
-  const saturdays = getSaturdaysInMonth(currentMonth);
-  const monthName = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }, [yachtId, view.year, view.month, attempt]);
 
   if (!yachtId) {
-    return <div className="date-picker">Please select a yacht first</div>;
+    return (
+      <section className="date-picker" aria-labelledby="date-heading">
+        <h2 id="date-heading">Select your start date</h2>
+        <p className="hint">Please select a yacht first to see its availability.</p>
+      </section>
+    );
   }
 
-  if (loading) return <div className="loading">Loading availability...</div>;
-  if (error) return <div className="error">Error: {error}</div>;
+  const today = todayISO();
+  const isCurrentMonth = view.year === Number(today.slice(0, 4)) && view.month === Number(today.slice(5, 7)) - 1;
+  const step = (delta: number) =>
+    setView(v => {
+      const d = new Date(Date.UTC(v.year, v.month + delta, 1));
+      return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+    });
+
+  const cells = buildMonth(view.year, view.month);
+  const interactive = !loading && !error;
 
   return (
-    <div className="date-picker">
-      <h2>Select Start Date</h2>
-      <div className="date-picker-header">
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getUTCFullYear(), currentMonth.getUTCMonth() - 1))}>
+    <section className="date-picker" aria-labelledby="date-heading">
+      <h2 id="date-heading">Select your start date</h2>
+      <p className="hint">Charters run Saturday to Saturday (7 nights). Only Saturdays can be selected.</p>
+
+      <div className="calendar-header">
+        <button type="button" className="icon-button" aria-label="Previous month" onClick={() => step(-1)} disabled={isCurrentMonth}>
           ←
         </button>
-        <h3>{monthName}</h3>
-        <button onClick={() => setCurrentMonth(new Date(currentMonth.getUTCFullYear(), currentMonth.getUTCMonth() + 1))}>
+        <h3 aria-live="polite">
+          {MONTH_NAMES[view.month]} {view.year}
+        </h3>
+        <button type="button" className="icon-button" aria-label="Next month" onClick={() => step(1)}>
           →
         </button>
       </div>
-      <div className="saturdays-grid">
-        {saturdays.map(saturday => {
-          const dateStr = saturday.toISOString().split('T')[0];
-          const availEntry = availability.get(dateStr);
-          const avail = availEntry?.status || 'Available';
-          const isSelected = dateStr === selectedDate;
 
+      {loading && (
+        <div className="loading" role="status">
+          <span className="spinner" aria-hidden="true" /> Loading availability…
+        </div>
+      )}
+      {error && (
+        <div className="error-message" role="alert">
+          {error}.{' '}
+          <button type="button" className="link-button" onClick={() => setAttempt(a => a + 1)}>
+            Retry
+          </button>
+        </div>
+      )}
+
+      <div className="calendar" role="group" aria-label={`${MONTH_NAMES[view.month]} ${view.year}`}>
+        {WEEKDAYS.map(d => (
+          <div key={d} className={`calendar-weekday ${d === 'Sat' ? 'sat' : ''}`} aria-hidden="true">
+            {d}
+          </div>
+        ))}
+        {cells.map((cell, i) => {
+          if (!cell.date) return <div key={`blank-${i}`} className="calendar-cell blank" />;
+          const day = Number(cell.date.slice(8));
+          if (!isSaturday(cell.date)) {
+            return (
+              <div key={cell.date} className="calendar-cell disabled" aria-hidden="true">
+                {day}
+              </div>
+            );
+          }
+          const status = availability.get(cell.date) ?? 'Available';
+          const past = !isFutureDate(cell.date);
+          const selected = cell.date === selectedDate;
+          const label = `Saturday ${day} ${MONTH_NAMES[view.month]} ${view.year}, ${past ? 'unavailable (past)' : status}`;
           return (
             <button
-              key={dateStr}
-              className={`saturday-button ${avail.toLowerCase()} ${isSelected ? 'selected' : ''}`}
-              onClick={() => handleDateSelect(saturday)}
-              title={`${saturday.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} - ${avail}`}
+              type="button"
+              key={cell.date}
+              className={`calendar-cell saturday ${past ? 'past' : status.toLowerCase()} ${selected ? 'selected' : ''}`}
+              aria-label={label}
+              aria-pressed={selected}
+              disabled={past || !interactive}
+              onClick={() => onSelect(cell.date!)}
             >
-              <div className="date-number">{saturday.getUTCDate()}</div>
-              <div className="availability-badge">{avail}</div>
+              <span className="day">{day}</span>
+              <span className="avail">{past ? '' : status}</span>
             </button>
           );
         })}
       </div>
+
+      <ul className="legend" aria-label="Availability legend">
+        <li><span className="dot available" /> Available</li>
+        <li><span className="dot held" /> Held</li>
+        <li><span className="dot booked" /> Booked</li>
+      </ul>
+
       {selectedDate && (
-        <div className="selected-dates">
-          <p>
-            {new Date(selectedDate + 'T00:00:00Z').toLocaleDateString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric'
-            })}{' '}
-            –{' '}
-            {new Date(new Date(selectedDate + 'T00:00:00Z').getTime() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString(
-              'en-US',
-              { weekday: 'short', month: 'short', day: 'numeric' }
-            )}{' '}
-            · 7 nights
-          </p>
-        </div>
+        <p className="selected-dates" data-testid="selected-dates">
+          {formatDateRange(selectedDate)}
+        </p>
       )}
-    </div>
+    </section>
   );
 }

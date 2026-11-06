@@ -12,7 +12,9 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "jsx": "react-jsx",
     "moduleResolution": "bundler",
+    "types": ["node", "jest", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]

@@ -1,58 +1,56 @@
-import React, { useState, useEffect } from 'react';
-import { getYachts } from '../api/client';
+import { formatEuro } from '../../shared/pricing';
 import type { Yacht } from '../../shared/types';
 
 interface YachtSelectorProps {
+  yachts: Yacht[];
+  loading: boolean;
+  error: string | null;
+  onRetry: () => void;
   selectedYachtId?: string;
   onSelect: (yachtId: string) => void;
 }
 
-export default function YachtSelector({ selectedYachtId, onSelect }: YachtSelectorProps) {
-  const [yachts, setYachts] = useState<Yacht[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function loadYachts() {
-      try {
-        const data = await getYachts();
-        setYachts(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadYachts();
-  }, []);
-
-  if (loading) return <div className="loading">Loading yachts...</div>;
-  if (error) return <div className="error">Error: {error}</div>;
-
+export default function YachtSelector({ yachts, loading, error, onRetry, selectedYachtId, onSelect }: YachtSelectorProps) {
   return (
-    <div className="yacht-selector">
-      <h2>Select Your Yacht</h2>
-      <div className="yacht-grid">
-        {yachts.map(yacht => (
-          <div
-            key={yacht.id}
-            className={`yacht-card ${selectedYachtId === yacht.id ? 'selected' : ''}`}
-            onClick={() => onSelect(yacht.id)}
-          >
-            {yacht.photoUrl && (
-              <img src={yacht.photoUrl} alt={yacht.name} className="yacht-photo" />
-            )}
-            <div className="yacht-info">
-              <h3>{yacht.name}</h3>
-              <p className="yacht-specs">
-                {yacht.lengthMeters}m · {yacht.cabins} cabins · {yacht.maxGuests} guests
-              </p>
-              <p className="yacht-price">from €{(yacht.weeklyRateEuro / 1000).toFixed(0)}k / week</p>
-            </div>
-          </div>
-        ))}
+    <section className="yacht-selector" aria-labelledby="yacht-heading">
+      <h2 id="yacht-heading">Select your yacht</h2>
+      {loading && (
+        <div className="loading" role="status">
+          <span className="spinner" aria-hidden="true" /> Loading yachts…
+        </div>
+      )}
+      {error && (
+        <div className="error-message" role="alert">
+          {error}{' '}
+          <button type="button" className="link-button" onClick={onRetry}>
+            Retry
+          </button>
+        </div>
+      )}
+      <div className="yacht-grid" role="group" aria-labelledby="yacht-heading">
+        {yachts.map(yacht => {
+          const selected = selectedYachtId === yacht.id;
+          return (
+            <button
+              type="button"
+              key={yacht.id}
+              className={`yacht-card ${selected ? 'selected' : ''}`}
+              aria-pressed={selected}
+              onClick={() => onSelect(yacht.id)}
+            >
+              {yacht.photoUrl && <img src={yacht.photoUrl} alt={`${yacht.name} yacht`} className="yacht-photo" />}
+              <span className="yacht-info">
+                <span className="yacht-name">{yacht.name}</span>
+                <span className="yacht-specs">
+                  {yacht.lengthMeters} m · {yacht.cabins} cabins · up to {yacht.maxGuests} guests
+                </span>
+                <span className="yacht-price">from {formatEuro(yacht.weeklyRateEuro)} / week</span>
+              </span>
+              {selected && <span className="selected-tag">Selected</span>}
+            </button>
+          );
+        })}
       </div>
-    </div>
+    </section>
   );
 }

@@ -1,81 +1,62 @@
-import React, { useState, useEffect } from 'react';
-import { getYachts } from '../api/client';
-import type { IndicativePricing } from '../../shared/types';
+import { calculatePricing, formatEuro } from '../../shared/pricing';
+import { APA_RATE, DEPOSIT_RATE, VAT_RATE } from '../../shared/constants';
+import type { Yacht } from '../../shared/types';
 
 interface PricingSummaryProps {
-  yachtId?: string;
+  yacht?: Yacht;
+  /** The panel shows once a yacht and a start date are chosen (US-07). */
+  hasDate: boolean;
 }
 
-export default function PricingSummary({ yachtId }: PricingSummaryProps) {
-  const [pricing, setPricing] = useState<IndicativePricing | null>(null);
+const pct = (n: number) => `${Math.round(n * 100)}%`;
 
-  useEffect(() => {
-    const calculatePricing = async () => {
-      if (!yachtId) {
-        setPricing(null);
-        return;
-      }
+export default function PricingSummary({ yacht, hasDate }: PricingSummaryProps) {
+  if (!yacht || !hasDate) {
+    return (
+      <aside className="pricing-summary placeholder" aria-label="Indicative estimate">
+        <h3>Indicative estimate</h3>
+        <p className="hint">Select a yacht and start date to see an estimate.</p>
+      </aside>
+    );
+  }
 
-      try {
-        const yachts = await getYachts();
-        const yacht = yachts.find(y => y.id === yachtId);
-        if (!yacht) return;
-
-        const charterFee = yacht.weeklyRateEuro;
-        const vat = charterFee * 0.12;
-        const apa = charterFee * 0.3;
-        const total = charterFee + vat + apa;
-        const deposit = total * 0.5;
-
-        setPricing({
-          charterFee,
-          vat,
-          apa,
-          total,
-          deposit
-        });
-      } catch (error) {
-        console.error('Failed to calculate pricing', error);
-      }
-    };
-
-    calculatePricing();
-  }, [yachtId]);
-
-  if (!pricing) return null;
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(price);
-  };
-
+  const pricing = calculatePricing(yacht.weeklyRateEuro);
   return (
-    <div className="pricing-summary">
-      <h3>Indicative Estimate</h3>
-      <div className="pricing-row">
-        <span>Charter Fee</span>
-        <span>{formatPrice(pricing.charterFee)}</span>
+    <>
+      <aside className="pricing-summary" aria-label="Indicative estimate">
+        <h3>Indicative estimate</h3>
+        <dl>
+          <div className="pricing-row">
+            <dt>Charter Fee</dt>
+            <dd>{formatEuro(pricing.charterFee)}</dd>
+          </div>
+          <div className="pricing-row">
+            <dt>VAT {pct(VAT_RATE)}</dt>
+            <dd>{formatEuro(pricing.vat)}</dd>
+          </div>
+          <div className="pricing-row">
+            <dt>APA {pct(APA_RATE)}</dt>
+            <dd>{formatEuro(pricing.apa)}</dd>
+          </div>
+          <div className="pricing-row total">
+            <dt>Total</dt>
+            <dd>{formatEuro(pricing.total)}</dd>
+          </div>
+          <div className="pricing-row deposit">
+            <dt>{pct(DEPOSIT_RATE)} Deposit</dt>
+            <dd>{formatEuro(pricing.deposit)}</dd>
+          </div>
+        </dl>
+        <p className="hint">Indicative only. A formal quote follows by email.</p>
+      </aside>
+      <div className="price-bar" aria-label="Indicative total">
+        <span>
+          Total <strong>{formatEuro(pricing.total)}</strong>
+        </span>
+        <span>
+          Deposit <strong>{formatEuro(pricing.deposit)}</strong>
+        </span>
       </div>
-      <div className="pricing-row">
-        <span>VAT 12%</span>
-        <span>{formatPrice(pricing.vat)}</span>
-      </div>
-      <div className="pricing-row">
-        <span>APA 30%</span>
-        <span>{formatPrice(pricing.apa)}</span>
-      </div>
-      <div className="pricing-row total">
-        <span>Total</span>
-        <span>{formatPrice(pricing.total)}</span>
-      </div>
-      <div className="pricing-row deposit">
-        <span>50% Deposit</span>
-        <span>{formatPrice(pricing.deposit)}</span>
-      </div>
-    </div>
+    </>
   );
 }

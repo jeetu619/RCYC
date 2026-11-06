@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" role="img" aria-label="Calliope">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd7a8"/><stop offset="1" stop-color="#fff1e0"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a8aa8"/><stop offset="1" stop-color="#0d4a63"/></linearGradient>
+  </defs>
+  <rect width="400" height="220" fill="url(#sky)"/>
+  <circle cx="70" cy="62" r="24" fill="#ff9e5e"/>
+  <rect y="132" width="400" height="88" fill="url(#sea)"/>
+  <path d="M85 130 L315 130 L296 156 L108 156 Z" fill="#fff"/>
+  <rect x="140" y="106" width="120" height="24" rx="4" fill="#f4f7fa"/>
+  <g fill="#0d4a63"><rect x="150" y="113" width="16" height="8" rx="2"/><rect x="174" y="113" width="16" height="8" rx="2"/><rect x="198" y="113" width="16" height="8" rx="2"/><rect x="222" y="113" width="16" height="8" rx="2"/></g>
+  <rect x="198" y="84" width="3" height="22" fill="#889"/>
+  <path d="M108 156 L296 156" stroke="#1b4d8c" stroke-width="3"/>
+  <path d="M0 172 Q50 162 100 172 T200 172 T300 172 T400 172" stroke="#ffffff55" stroke-width="3" fill="none"/>
+  <path d="M0 194 Q50 184 100 194 T200 194 T300 194 T400 194" stroke="#ffffff33" stroke-width="3" fill="none"/>
+</svg>
