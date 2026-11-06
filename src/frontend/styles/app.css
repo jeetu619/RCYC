@@ -37,6 +37,9 @@ p { margin: 0 0 .75rem; }
 
 .page { min-height: 100vh; padding-bottom: 5rem; }
 .page-header { background: linear-gradient(135deg, var(--navy), var(--navy-2)); color: #fff; padding: 2rem 1.5rem; text-align: center; }
+.page-header { position: relative; }
+.header-links { position: absolute; top: .75rem; right: 1rem; }
+.header-links a { color: #fff; font-size: .9rem; text-decoration: underline; }
 .page-header h1 { color: #fff; font-size: 1.9rem; }
 .page-header p { margin: 0; opacity: .9; }
 .dashboard-header { display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 1rem; }
