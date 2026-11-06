@@ -5,6 +5,7 @@ import { validateCharterEnquiry } from '../shared/validators';
 import { generateBookingReference } from './services/bookingReferenceService';
 import { getYachtAvailability, checkLiveAvailability } from './services/availabilityService';
 import { v4 as uuidv4 } from 'uuid';
+import { createServer } from 'net';
 import type { CharterEnquiry, BrokerEnquiryListResponse } from '../shared/types';
 
 const app = express();
@@ -298,12 +299,48 @@ app.get('/api/charter-enquiries', authenticateBroker, async (req, res) => {
   }
 });
 
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close();
+      resolve(true);
+    });
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+async function findAvailablePort(startPort: number): Promise<number> {
+  let port = startPort;
+  const maxAttempts = 100;
+
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+    port++;
+  }
+
+  throw new Error(`Could not find available port after ${maxAttempts} attempts starting from port ${startPort}`);
+}
+
 async function start() {
   try {
     await initializeDatabase();
-    const port = 3000;
-    app.listen(port, () => {
-      console.log(`Charter enquiry server running on http://localhost:${port}`);
+    const preferredPort = 3000;
+    const port = await findAvailablePort(preferredPort);
+
+    const server = app.listen(port, '127.0.0.1', () => {
+      if (port !== preferredPort) {
+        console.log(`Port ${preferredPort} is in use. Charter enquiry server running on http://localhost:${port}`);
+      } else {
+        console.log(`Charter enquiry server running on http://localhost:${port}`);
+      }
+    });
+    server.on('error', (error) => {
+      console.error('Failed to start server:', error);
+      process.exit(1);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
