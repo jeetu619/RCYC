@@ -1,0 +1,243 @@
+.yacht-selector h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.yacht-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.yacht-card {
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: white;
+}
+
+.yacht-card:hover {
+  border-color: #0066cc;
+  box-shadow: 0 4px 8px rgba(0, 102, 204, 0.2);
+}
+
+.yacht-card.selected {
+  border-color: #0066cc;
+  background-color: #f0f6ff;
+}
+
+.yacht-photo {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  background-color: #e0e0e0;
+}
+
+.yacht-info {
+  padding: 1rem;
+}
+
+.yacht-info h3 {
+  font-size: 1.1rem;
+  margin-bottom: 0.5rem;
+}
+
+.yacht-specs {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.yacht-price {
+  font-weight: bold;
+  color: #0066cc;
+}
+
+.date-picker h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.date-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.date-picker-header button {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0 1rem;
+}
+
+.date-picker-header h3 {
+  flex: 1;
+  text-align: center;
+}
+
+.saturdays-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.saturday-button {
+  padding: 1rem;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.saturday-button:hover {
+  border-color: #0066cc;
+}
+
+.saturday-button.selected {
+  border-color: #0066cc;
+  background-color: #f0f6ff;
+}
+
+.saturday-button.available {
+  border-color: #4caf50;
+}
+
+.saturday-button.held {
+  border-color: #ff9800;
+}
+
+.saturday-button.booked {
+  border-color: #f44336;
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.date-number {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.availability-badge {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+.selected-dates {
+  text-align: center;
+  padding: 1rem;
+  background-color: #f0f6ff;
+  border-radius: 4px;
+}
+
+.pricing-summary {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  position: sticky;
+  top: 1rem;
+}
+
+.pricing-summary h3 {
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.pricing-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #eee;
+}
+
+.pricing-row.total {
+  border-top: 2px solid #0066cc;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  font-weight: bold;
+}
+
+.pricing-row.deposit {
+  border-top: 1px solid #eee;
+  padding-top: 1rem;
+  font-weight: bold;
+  color: #0066cc;
+}
+
+.availability-status {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  margin-top: 1rem;
+}
+
+.availability-status h3 {
+  margin-bottom: 1rem;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: bold;
+  margin-bottom: 1rem;
+}
+
+.status-badge.available {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-badge.onhold {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.status-badge.booked,
+.status-badge.capacityexceeded {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.alternatives {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.alternatives h4 {
+  margin-bottom: 0.5rem;
+}
+
+.alternative-button {
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.3s;
+}
+
+.alternative-button:hover {
+  border-color: #0066cc;
+  background-color: #f0f6ff;
+}
+
+.alt-reason {
+  font-size: 0.85rem;
+  color: #666;
+}
