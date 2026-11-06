@@ -335,6 +335,16 @@ export function createApp(options: AppOptions = {}) {
   if (fs.existsSync(path.join(staticDir, 'index.html'))) {
     app.use(express.static(staticDir));
     app.get('*', (_req, res) => res.sendFile(path.join(staticDir, 'index.html')));
+  } else {
+    app.get('*', (_req, res) =>
+      res
+        .status(503)
+        .type('text/plain')
+        .send(
+          'The front end has not been built. Run "npm run build" and restart, ' +
+            'or use "npm run dev" and open http://localhost:5173.'
+        )
+    );
   }
 
   // Malformed JSON and other body-parser failures are client errors.
