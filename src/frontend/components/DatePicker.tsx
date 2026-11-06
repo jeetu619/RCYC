@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getYachtAvailability } from '../api/client';
+import { getYachtAvailability } from '../services/client';
 import { formatDateRange, isFutureDate, isSaturday, toISODate, todayISO } from '../../shared/dates';
 import type { AvailabilityEntry, AvailabilityStatus } from '../../shared/types';
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ApiError, submitEnquiry } from '../api/client';
+import { ApiError, submitEnquiry } from '../services/client';
 import { useEnquiryForm } from '../hooks/useEnquiryForm';
 import { useLiveAvailability } from '../hooks/useLiveAvailability';
 import { useYachts } from '../hooks/useYachts';

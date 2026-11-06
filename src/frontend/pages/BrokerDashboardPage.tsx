@@ -7,7 +7,7 @@ import {
   getBrokerSession,
   getYachts,
   BrokerFilters
-} from '../api/client';
+} from '../services/client';
 import { formatShortDate } from '../../shared/dates';
 import type { BrokerEnquiryListResponse, Yacht } from '../../shared/types';
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ApiError, getEnquiryDetails } from '../api/client';
+import { ApiError, getEnquiryDetails } from '../services/client';
 import { downloadIcs } from '../utils/ics';
 import type { EnquiryConfirmation } from '../../shared/types';
 

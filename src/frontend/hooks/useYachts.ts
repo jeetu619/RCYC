@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { getYachts } from '../api/client';
+import { getYachts } from '../services/client';
 import type { Yacht } from '../../shared/types';
 
 export function useYachts() {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { checkLiveAvailability } from '../api/client';
+import { checkLiveAvailability } from '../services/client';
 import { LIVE_CHECK_DEBOUNCE_MS } from '../../shared/constants';
 import type { AlternativeOption, LiveCheckStatus } from '../../shared/types';
 
