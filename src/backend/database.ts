@@ -91,7 +91,12 @@ async function seedYachts() {
   if (!db) throw new Error('Database not initialized');
 
   const yachtCount = await db.get('SELECT COUNT(*) as count FROM yachts');
-  if (yachtCount.count > 0) return;
+  if (yachtCount.count > 0) {
+    // Databases seeded before photos existed: fill in the missing images.
+    await db.run("UPDATE yachts SET photoUrl = '/images/sea-lark.svg' WHERE id = 'yacht-sea-lark' AND (photoUrl IS NULL OR photoUrl = '')");
+    await db.run("UPDATE yachts SET photoUrl = '/images/calliope.svg' WHERE id = 'yacht-calliope' AND (photoUrl IS NULL OR photoUrl = '')");
+    return;
+  }
 
   await db.exec(`
     INSERT INTO yachts (id, name, lengthMeters, cabins, maxGuests, weeklyRateEuro, photoUrl) VALUES
